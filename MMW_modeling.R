@@ -8,6 +8,8 @@ library(psychonetrics)
 library(bootnet)      
 library(NetworkComparisonTest)
 
+no_cores <- parallel::detectCores() - 1
+
 # remove all data in global environment
 rm(list = ls())
 
@@ -15,11 +17,9 @@ rm(list = ls())
 source("sources/plot_hist_facet.R")
 
 # read in cleaned data
-mydata <- readRDS("data_cleaned.rds")
+mydata <- readRDS("rds/data_cleaned.rds")
 
-# Modeling
-
-## correlations ----
+## correlations
 mydata_t0 <- mydata %>% select(t0_AF:t0_AE) %>% rename_at(vars(starts_with("t0_")),  ~ str_replace(., "t0_", ""))
 mydata_t1 <- mydata %>% select(t1_AF:t1_AE) %>% rename_at(vars(starts_with("t1_")),~ str_replace(., "t1_", ""))
 mydata_t2 <- mydata %>% select(t2_AF:t2_AE) %>% rename_at(vars(starts_with("t2_")),~ str_replace(., "t2_", ""))
@@ -103,6 +103,45 @@ par(mfrow = c(1,1))
 plot(gg_centralities)
 dev.off()
 
+##  Estimate Stability and accuracy
+
+## Set seed
+set.seed(1234)
+
+result_t0 <- estimateNetwork(mydata_t0,default = "EBICglasso", corMethod = "cor_auto",tuning = 0.5)
+
+## estimate the accuracy of the edge weights in the network
+boot0 <- bootnet(result_t0, nBoots = 5000, nCores = no_cores)
+
+# Figure S3 supplemental material - Print edge weight CI
+tiff("Fig S3 bootstrap_edge weight_accuracy_reading.tiff", width = 2200, 
+     height = 2200, units = "px", res = 300)
+par(mfrow = c(1, 1))
+plot(boot0, plot = "interval", order = "sample", labels = TRUE)
+dev.off()
+
+# Figure S4 supplemental material - Print edge weight difference test
+tiff("Fig S4 bootstrap_edge weight_diff_reading.tiff", width = 2200, 
+     height = 2200, units = "px", res = 300)
+par(mfrow = c(1, 1))
+plot(boot0,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
+dev.off()
+
+# Centrality stability - casedropping bootstrap
+boot0_case <- bootnet(result_t0, nBoots = 5000, type = "case", nCores = no_cores, 
+                 statistics = c("strength", "closeness", "betweenness"))
+
+# CS-coefficients for strength in the person-dropping stability analysis
+corStability(boot0_case, statistics = c("strength"))
+
+# Figure S4 supplemental material - Average correlation between three centrality
+# indices of the glasso network  
+tiff("Fig S5 bootstrap_centrality_stability_reading.tiff", width = 2200, 
+     height = 2200, units = "px", res = 300)
+par(mfrow = c(1, 1))
+  plot(boot0_case, statistics = c("strength", "closeness", "betweenness"))
+dev.off()
+
 ## Network Comparison Test ----
 
 # Create a new dataframe for music with the mean values of the two music networks
@@ -168,6 +207,7 @@ difference_value(NCT_reading_music)
 
 # 3 PanelGVAR modeling ----
 
+## a) Checks ----
 # check the variances across the measurement points
 mydata %>% select(t0_AF:t2_AE) %>% 
   map_df(sd) %>% 
@@ -182,18 +222,17 @@ mydata %>% select(t0_AF:t2_AE) %>%
                names_to = c('time', '.value'), 
                names_sep = '\\_')
 
-## Scaling data ----
+## b) Scaling/ standardizing data ----
 data <- mydata %>% select(t0_AF:t2_AE)
+
 # standardize data across time points
 data_scaled <- as.data.frame(scale(data))
 
 # plot distributions of scaled variables
 plot_hist_facet(data_scaled, bins = 8, ncol = 7)
 
-# save file
 saveRDS(data_scaled, file = "data_scaled.rds")
-# read file
-# data_scaled <- readRDS("data_scaled.rds")
+# data_scaled <- readRDS("rds/data_scaled.rds")
 
 # Checking similarity of sd's
 data_scaled %>% 
@@ -209,7 +248,71 @@ data_scaled %>%
                names_to = c('time', '.value'), 
                names_sep = '\\_')
 
-# define design matrix (across 3 measurement points)
+## c) Standardizing and detrending data ----
+# Since GVAR models assume stationary relations across time, prior to fitting
+# the models, data was detrended for linear time-related effects and was then
+# standardized across time points
+# vars <- c("AF","SA","IM", "VA","CALM","THO","AE")
+# 
+# variables        <- list()
+# variables_lm     <- list()
+# variables_scaled <- list()
+# 
+# mydata_detrend <- mydata %>%
+#   rename(id = ID) %>%
+#   select(id,t0_AF:t2_AE) %>%
+#   mutate(t0_VA   = log10(max(t0_VA   + 1) - t0_VA),
+#          t1_VA   = log10(max(t1_VA   + 1) - t1_VA),
+#          t2_VA   = log10(max(t2_VA   + 1) - t2_VA),
+#          t0_CALM = log10(max(t0_CALM + 1) - t0_CALM),
+#          t1_CALM = log10(max(t1_CALM + 1) - t1_CALM),
+#          t2_CALM = log10(max(t2_CALM + 1) - t2_CALM))
+# 
+# # detrending loop 
+# for (i in 1:7) {
+#
+#   # reshape data
+#   variables[[i]] <- mydata_detrend %>% 
+#                     select(contains(vars[i]), id) %>%
+#                     gather(time, var, contains(vars[i])) %>% 
+#                     mutate(time = rep(c(1,2,3), each = 352),
+#                     # dummy variable for reading and music
+#                     read_music = case_when(
+#                     time == 1 ~ 1,
+#                     TRUE      ~ 0),
+#                     read_music = as.factor(read_music))
+#   
+#   # detrend linearly and quadratically
+#   variables_lm[[i]] <- lm(var ~ read_music + time + I(time^2), data = variables[[i]])
+#   
+#   # save detrended data
+#   variables[[i]]$var[!is.na(variables[[i]]$var)] <- residuals(variables_lm[[i]])
+#   
+#   # reshape data
+#   variables_scaled[[i]] <-   variables[[i]] %>% select(-read_music) %>% 
+#     spread(time, var) %>%
+#     select(-id) %>%
+#     as.matrix %>%
+#     as.vector() %>%
+#     scale() %>%
+#     matrix(nrow = 352, ncol = 3) %>% # ncol refers to number of waves
+#     as.data.frame()
+#   
+#   # save formatted and detrended data
+#   colnames(variables_scaled[[i]]) <- mydata_detrend %>% 
+#     select(contains(vars[i])) %>%
+#     colnames
+# }
+# 
+# # properly reorder variables
+# data_scaled <- variables_scaled %>% 
+#   as.data.frame() %>% 
+#   select(contains("t0"),contains("t1"),contains("t2"))
+
+# plot distributions of scaled and de-trended variables
+# plot_hist_facet(data_scaled, bins = 8, ncol = 7)
+
+## c) Define design matrix ----
 design <- matrix(colnames(data_scaled), nrow = 7, ncol = 3)
 colnames(design) <- c("t0", "t1", "t2")
 rownames(design) <- c("AF","SA","IM","VA","CALM", "THO","AE")
@@ -223,21 +326,24 @@ ev1 <- eigen(cor(data_scaled[,design[,1]]))$values
 ev2 <- eigen(cor(data_scaled[,design[,2]]))$values
 ev3 <- eigen(cor(data_scaled[,design[,3]]))$values
 
-# it appears that the second and third time points (music) are more
-# unidimensional than the first time point (reading)
-par(mfrow = c(1, 1))
-matplot(cbind(ev1,ev2,ev3),type = "l", ylab = "Eigenvalue")
+# It appears that the second and third time points (music) are
+# more unidimensional than the first time point (reading)
+# Plot networks
+tiff("Eigenvalues.tiff", width = 2200, height = 2200, units = "px", res = 300)
+  par(mfrow = c(1, 1))
+  matplot(cbind(ev1,ev2,ev3),type = "l", ylab = "Eigenvalue")
+dev.off()
 
 # Labels to be used in graphs
 labels <- rownames(design)
 
-## Estimate saturated model----
+## d) Estimate saturated model----
 model1 <- panelgvar(data      = data_scaled, 
                     vars      = design,
                     estimator = "ML",
                     storedata = TRUE)
 
-## a) run the model ----
+## ) Run the model
 model1 <- model1 %>% runmodel
 
 # The warning message (from package creator: https://github.com/SachaEpskamp/psychonetrics/issues/10)
@@ -252,7 +358,7 @@ model1 %>% fit
 # check parameters
 model1 %>% parameters()
 
-## Plot analytic confidence intervals ----
+## Plot analytic confidence intervals 
 # The confidence intervals are only valid for the saturated model
 tiff(filename = "Final_CIplots_within_saturated_model.tiff", width = 4000, height = 4000, res = 450)
 par(mfrow = c(1,1))
@@ -269,17 +375,17 @@ par(mfrow = c(1,1))
 CIplot(model1, "omega_zeta_between")
 dev.off()
 
-## b) Prune to find a sparse model ----
+## e) Prune to find a sparse model ----
 model2 <- model1 %>% prune(alpha = 0.05, recursive = FALSE)
 fit(model2) 
             
-## c) stepup model ----
+## f) Stepup model ----
 model3 <- model2 %>% stepup(criterion = "bic",alpha = 0.05)
 fit(model3) 
             
 model3 %>% parameters()
 
-## e) compare all models ----
+## g) Compare all models ----
 compare(baseline     = model1, 
         pruned       = model2,
         stepup       = model3) # <- best AIC and BIC
@@ -399,18 +505,87 @@ tiff(filename="strength centrality temporal network.tiff", width=1250, height=25
 centralityPlot(tg,scale = "z-score", include = c("InStrength", "OutStrength"))
 dev.off()
 
-# 6 Bootstrap analysis ----
-# keep number low (ca. 100), otherwise may take quite a long time
+# 5. RI-CLPM -----                        
+
+# use existing function for model estimation
+riclpm_res <- generate_ri_clpm(data_scaled, design)
+
+riclpm_summary <- summary(riclpm_res$lavres, 
+                          standardized = TRUE, 
+                          fit.measures = TRUE,
+                          modindices = TRUE,
+                          rsquare = TRUE)
+
+lavaan::standardizedSolution(riclpm_res$lavres)
+
+fitmeasures <- print(lavaan::fitMeasures(riclpm_res$lavres, 
+                                         c("chisq", "df","pvalue", 
+                                           "cfi","tli", "srmr","gfi",
+                                           "rmsea","rmsea.ci.lower","rmsea.ci.upper","rmsea.pvalue"), 
+                                         output = "text"), add.h0 = TRUE)
+
+# inspect model fit 
+riclpm_summary$fit 
+
+## a) Temporal network ----
+temporal_thresholded_riclpm <- riclpm_res$matrices
+
+## threshold temporal effects from RI-CLPM
+temporal_thresholded_riclpm$PDC$est[temporal_thresholded_riclpm$PDC$p >= 0.001] <- 0
+
+# visualized thresholded temporal network
+temp_thresh_riclpm <- qgraph(temporal_thresholded_riclpm$PDC$est, 
+                             #labels = labels_net, 
+                             groups = gr, 
+                             nodeNames = names,
+                             theme = "colorblind", 
+                             layout = L,
+                             #vsize = 6,legend.cex = .50, legend.mode = "style1", # aesthetics,
+                             legend = FALSE
+)
+
+tiff(filename = "temporal_thresh_riclpm.tiff", width = 3000, height = 2000, res = 300)
+plot(temp_thresh_riclpm)
+dev.off()
+
+## b) Contemporaneous Network ---- 
+contemp_thresholded_riclpm <- riclpm_res$matrices$contemporaneous_covariances
+
+## threshold contemporaneous effects from RI-CLPM
+contemp_thresholded_riclpm$est[contemp_thresholded_riclpm$p >= 0.001] <- 0
+diag(contemp_thresholded_riclpm$est) <- 0
+
+# visualized thresholded contemporaneous network
+contemp_thresh_riclpm <- qgraph(contemp_thresholded_riclpm$est, 
+                                groups = gr, 
+                                nodeNames = names,
+                                theme = "colorblind", 
+                                layout = L,
+                                #vsize = 6,legend.cex = .50, legend.mode = "style1" # aesthetics,
+                                legend = FALSE
+)
+
+tiff(filename = "contemporaneous_thresh_riclpm.tiff", width = 3000, height = 2000, res=300)
+plot(contemp_thresh_riclpm)
+dev.off()
+
+
+# 6 Stability Analysis with bootstrapping ----
+
+# see Nur Hani Zainal & Michelle G. Newman" (2021) for a detailed description
+
+## a) Bootstrapping ----
+# keep number low (ca. 200), otherwise may take quite a long time
 set.seed(1234)
-nBoot <- 2
+nBoot <- 200
 
 Bootstraps <- lapply(1:nBoot, function(x) {
   
   message("Simulation: ",x)
   
   # Sample from the data
-  bootData <- mydata_t012[sample(1:nrow(mydata_t012), 
-                                 round(0.75 * nrow(mydata_t012))), ]
+  bootData <- data_scaled[sample(1:nrow(data_scaled), 
+                                 round(0.75 * nrow(data_scaled))), ]
   
   # Form model
   bootstrapped_model <-
@@ -421,29 +596,16 @@ Bootstraps <- lapply(1:nBoot, function(x) {
   
   # Run first time
   bootstrapped_model <- bootstrapped_model %>% runmodel %>% 
-    
-    # Fix the problematic parameters to zero:
-    # diaglep <- diag(getmatrix(bootstrapped_model, "lowertri_epsilon_between"))
-    # if (any(abs(diaglep) < 1e-6)){
-    #   for (i in which(abs(diaglep) < 1e-6)){
-    #     bootstrapped_model <- bootstrapped_model %>% 
-    #       fixpar("lowertri_epsilon_between",i,i,value = 0)
-    #   }
-    # }
-    
-    
   prune(alpha = 0.05, recursive = FALSE) %>% 
     stepup(criterion = "bic")
   
   return(bootstrapped_model)
 })
 
-# 7 Stability Analysis ----
-# 
 # Extracting stability analyses to check the degree to which individual edges
 # were included across all bootstrap samples 
 
-##  bootstrapped results: temporal ----
+## b) Bootstrapped results for temporal network ----
 # check if individual edges are included (y/n)
 resBoots_temp <-
   lapply(Bootstraps, function(x)
@@ -456,7 +618,7 @@ row.names(Bootstraps_temporal_est_df) <- colnames(Bootstraps_temporal_est_df) <-
 
 write.csv(Bootstraps_temporal_est_df, "Bootstraps_temporal_est_df.csv")
 
-## bootstrapped results: contemporaneous ----
+## c) Bootstrapped results for contemporaneous network----
 resBoots_cont <-
   lapply(Bootstraps, function(x)
     ifelse(getmatrix(x, "omega_zeta_within") > 0, 1, 0))

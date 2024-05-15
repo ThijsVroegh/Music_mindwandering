@@ -1,12 +1,11 @@
 #    A temporal network approach to music-induced mind wandering   
 #                      L.Taruffi & T.Vroegh 2024
 
-# 1. Load libraries ----
+# Libraries ----
 library(tidyverse)
 library(reshape2)
 library(corrplot)     # for plotting correlation matrices
 library(psy)          # for correlation matrices
-#library(matrixcalc)   # for matrix multiplication
 library(networktools) # goldbricker
 library(psych)        # for correlation matrices
 
@@ -17,7 +16,7 @@ rm(list = ls())
 source("sources/plot_hist_facet.R")
 
 # read in cleaned data
-mydata <- readRDS("data_cleaned.rds")
+mydata <- readRDS("rds/data_cleaned.rds")
 
 # Exploratory data analysis ----
 
@@ -48,7 +47,7 @@ cat("Weighted Standard Deviation:", weighted_sd, "\n")
 
 table(mydata$Musician)
 
-## a) structure of thoughts (correlations: (Q7) ----
+## b) structure of thoughts (correlations: (Q7) ----
 mydata_thoughts <- mydata %>% 
   select(Amount_of_thoughts:thoughts_chaotic) %>% 
   as.data.frame() %>% 
@@ -99,7 +98,7 @@ for (var in colnames(mydata_thoughts)) {
 }
 dev.off()
 
-## b) contents of thought (time, subject, function) ----
+## c) contents of thought (time, subject, function) ----
 
 # 1) time orientation (Q9)
 mydata_time_thought <- mydata %>% select(Q9_1:Q9_7) %>% as.data.frame()
@@ -246,28 +245,19 @@ tiff("Figure frequencies_ci_7dim.tiff", width = 2200, height = 1000, units = "px
 print(freqbar + scale_y_continuous(name = "mean"))
 dev.off()
 
-## correlations between dimensions and traits ----
-mydata_t0 <- mydata %>% select(t0_AF:t0_AE,IRI_Fantasy:Spontaneous_MW) %>% as.data.frame()
-mydata_t1 <- mydata %>% select(t1_AF:t1_AE,IRI_Fantasy:Spontaneous_MW) %>% as.data.frame()
-mydata_t2 <- mydata %>% select(t2_AF:t2_AE,IRI_Fantasy:Spontaneous_MW) %>% as.data.frame()
-
-cor_t0 <- round(cor(mydata_t0, method = "spearman"),2)
-cor_t1 <- round(cor(mydata_t1, method = "spearman"),2)
-cor_t2 <- round(cor(mydata_t2, method = "spearman"),2)
-
-## correlations between dimensions only ----
-mydata_t0 <- mydata_t0 %>% select(t0_AF:t0_AE) 
-mydata_t1 <- mydata_t1 %>% select(t1_AF:t1_AE) 
-mydata_t2 <- mydata_t2 %>% select(t2_AF:t2_AE)
+## e) correlations between dimensions ----
+mydata_t0 <- mydata %>% select(t0_AF:t0_AE) %>% as.data.frame() 
+mydata_t1 <- mydata %>% select(t1_AF:t1_AE) %>% as.data.frame()
+mydata_t2 <- mydata %>% select(t2_AF:t2_AE) %>% as.data.frame()
 
 cor_t0 <- round(cor(mydata_t0, method = "spearman"),2)
 cor_t1 <- round(cor(mydata_t1, method = "spearman"),2)
 cor_t2 <- round(cor(mydata_t2, method = "spearman"),2)
 
 #check pd  
-is.positive.definite(cor_t0)
-is.positive.definite(cor_t1)
-is.positive.definite(cor_t2)
+corpcor::is.positive.definite(cor_t0)
+corpcor::is.positive.definite(cor_t1)
+corpcor::is.positive.definite(cor_t2)
 
 # Rename the column names of the dataframes so that they are equal and can be 
 # used in the NCT (i.e. removing the t0, t1, and t2 in column names)
@@ -316,7 +306,7 @@ tiff(filename="densities_t2.tiff", width=4500, height=2500, res=450)
 plot_hist_facet(mydata_t2)
 dev.off()
 
-## i) testing for collinearity with goldbricker function ----
+## h) testing for collinearity with goldbricker function ----
 ## Use goldbricker function to search for potential "bad pairs"
 ## This function compares correlations in a psychometric network in order to identify
 ## nodes which most likely measure the same underlying construct (i.e., are colinear).
