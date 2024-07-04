@@ -271,7 +271,7 @@ mydata_tbl3 <- df_imputed %>%
 
 ## alphas and inter-item correlations ----
 
-#alphas of measures
+# alphas of measures
 IRI_alpha <- alpha(mydata_tbl3[c('Q13_IRI_Fantasy_1',
                                  'Q13_IRI_Fantasy_2',
                                  'Q13_IRI_Fantasy_3',
@@ -290,35 +290,33 @@ Spontaneous_MW <- alpha(mydata_tbl3[c('Q14_Del_Spont_MW_5',
                                       'Q14_Del_Spont_MW_7',
                                       'Q14_Del_Spont_MW_8')])  #.81 
 
-# it's a good thing to assess the reliability of your scale at different times. 
-# This indicates whether the reliability of your instrument is stable during the whole survey,
-# responding to the same questionnaire many times can be a pain, which can lead to less precise answers.
-AF_0_alpha   <- cor(mydata_tbl3[['t0_11']], 8-mydata_tbl3[['t0_10']])
-SA_0_alpha   <- cor(mydata_tbl3[['t0_3']],    mydata_tbl3[['t0_12']])
-IM_0_alpha   <- alpha(mydata_tbl3[c('t0_4','t0_13','t0_2')], keys=c(1,1,1))
-ID_0_alpha   <- cor(mydata_tbl3[['t0_5']],    mydata_tbl3[['t0_14']]) 
-THO_0_alpha  <- cor(mydata_tbl3[['t0_8']],  8-mydata_tbl3[['t0_17']])
-VAL_0_alpha  <- cor(mydata_tbl3[['t0_6']],  8-mydata_tbl3[['t0_15']]) 
-CALM_0_alpha <- cor(mydata_tbl3[['t0_7']],    mydata_tbl3[['t0_16']]) 
-AE_0_alpha   <- cor(mydata_tbl3[['t0_9']],    mydata_tbl3[['t0_18']]) 
+## inter-item correlations
+correlations <- list(
+  AF_alpha = c(),
+  SA_alpha = c(),
+  IM_alpha = c(),
+  ID_alpha = c(),
+  THO_alpha = c(),
+  VAL_alpha = c(),
+  CALM_alpha = c(),
+  AE_alpha = c()
+)
 
-AF_1_alpha   <- cor(mydata_tbl3[['t1_11']], 8-mydata_tbl3[['t1_10']])
-SA_1_alpha   <- cor(mydata_tbl3[['t1_3']],    mydata_tbl3[['t1_12']])
-IM_1_alpha   <- alpha(mydata_tbl3[c('t1_4','t1_13','t1_2')], keys=c(1,1,1))
-ID_1_alpha   <- cor(mydata_tbl3[['t1_5']],    mydata_tbl3[['t1_14']]) 
-THO_1_alpha  <- cor(mydata_tbl3[['t1_8']],  8-mydata_tbl3[['t1_17']])
-VAL_1_alpha  <- cor(mydata_tbl3[['t1_6']],  8-mydata_tbl3[['t1_15']]) 
-CALM_1_alpha <- cor(mydata_tbl3[['t1_7']],    mydata_tbl3[['t1_16']]) 
-AE_1_alpha   <- cor(mydata_tbl3[['t1_9']],    mydata_tbl3[['t1_18']]) 
+# Calculate correlations for each time point and store them in the list
+time_points <- c(0, 1, 2)
+for (t in time_points) {
+  correlations$AF_alpha   <- c(correlations$AF_alpha, cor(mydata_tbl3[[paste0('t', t, '_11')]], 8 - mydata_tbl3[[paste0('t', t, '_10')]]))
+  correlations$SA_alpha   <- c(correlations$SA_alpha, cor(mydata_tbl3[[paste0('t', t, '_3')]], mydata_tbl3[[paste0('t', t, '_12')]]))
+  correlations$IM_alpha   <- c(correlations$IM_alpha, cor(mydata_tbl3[[paste0('t', t, '_4')]], mydata_tbl3[[paste0('t', t, '_13')]]))
+  correlations$ID_alpha   <- c(correlations$ID_alpha, cor(mydata_tbl3[[paste0('t', t, '_5')]], mydata_tbl3[[paste0('t', t, '_14')]]))
+  correlations$THO_alpha  <- c(correlations$THO_alpha, cor(mydata_tbl3[[paste0('t', t, '_8')]], 8 - mydata_tbl3[[paste0('t', t, '_17')]]))
+  correlations$VAL_alpha  <- c(correlations$VAL_alpha, cor(mydata_tbl3[[paste0('t', t, '_6')]], 8 - mydata_tbl3[[paste0('t', t, '_15')]]))
+  correlations$CALM_alpha <- c(correlations$CALM_alpha, cor(mydata_tbl3[[paste0('t', t, '_7')]], mydata_tbl3[[paste0('t', t, '_16')]]))
+  correlations$AE_alpha   <- c(correlations$AE_alpha, cor(mydata_tbl3[[paste0('t', t, '_9')]], mydata_tbl3[[paste0('t', t, '_18')]]))
+}
 
-AF_2_alpha   <- cor(mydata_tbl3[['t2_11']], 8-mydata_tbl3[['t2_10']])
-SA_2_alpha   <- cor(mydata_tbl3[['t2_3']],    mydata_tbl3[['t2_12']])
-IM_2_alpha   <- alpha(mydata_tbl3[c('t2_4','t2_13','t2_2')], keys=c(1,1,1))
-ID_2_alpha   <- cor(mydata_tbl3[['t2_5']],    mydata_tbl3[['t2_14']]) 
-THO_2_alpha  <- cor(mydata_tbl3[['t2_8']],  8-mydata_tbl3[['t2_17']])
-VAL_2_alpha  <- cor(mydata_tbl3[['t2_6']],  8-mydata_tbl3[['t2_15']]) 
-CALM_2_alpha <- cor(mydata_tbl3[['t2_7']],    mydata_tbl3[['t2_16']]) 
-AE_2_alpha   <- cor(mydata_tbl3[['t2_9']],    mydata_tbl3[['t2_18']]) 
+# Calculate the mean correlation for each variable
+mean_correlations <- sapply(correlations, mean)
 
 mydata_tbl4 <- mydata_tbl3 %>% 
   
@@ -329,14 +327,12 @@ mydata_tbl4 <- mydata_tbl3 %>%
          IRI_Fantasy: Spontaneous_MW,
          Age,Sex,Musician) %>% 
   
-  # we dont include these variables in the analysis
+  # we don't include these variables in the network analysis
   select(-t0_DIR, -t1_DIR, -t2_DIR,
          -t0_VC, -t1_VC, -t2_VC,
          -t0_ID, -t1_ID, -t2_ID,
          -thoughts_keyword1, -thoughts_keyword2, -thoughts_keyword3,
          -M_genre) 
 
-glimpse(mydata_tbl4)
-
-# save data dor exploratory data analysis and modeling
+# save data for further exploratory data analysis and network modeling
 saveRDS(mydata_tbl4,"data_cleaned.rds")
