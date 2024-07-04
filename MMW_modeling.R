@@ -15,6 +15,11 @@ rm(list = ls())
 
 # source functions
 source("sources/plot_hist_facet.R")
+source("sources/plot_bar_facet.R")
+source("sources/generate_ri_clpm.R")
+
+# random permutation seed
+set.seed(1234) 
 
 # read in cleaned data
 mydata <- readRDS("rds/data_cleaned.rds")
@@ -26,7 +31,50 @@ mydata_t2 <- mydata %>% select(t2_AF:t2_AE) %>% rename_at(vars(starts_with("t2_"
 
 # 2 GGM networks reading versus music ----
 
-## Networks ----
+# Create a new dataframe for music with the mean values of the two music networks
+df_mean <- data.frame(matrix(0, nrow = nrow(mydata_t1), ncol = ncol(mydata_t1)))
+
+# Loop through each variable
+for (col_index in seq_along(colnames(mydata_t1))) {
+  df_mean[[col_index]] <- rowMeans(cbind(mydata_t1[[col_index]], mydata_t2[[col_index]]))
+}
+
+# Rename the columns based on original variable names
+colnames(df_mean) <- colnames(mydata_t1)
+
+reading <- mydata_t0 
+music   <- df_mean   
+
+network_reading <- EBICglasso(cor_auto(reading),n = nrow(reading)) 
+network_music <- EBICglasso(cor_auto(music),n = nrow(music)) 
+
+t_reading <- qgraph(network_reading, layout = 'spring', 
+             details = FALSE, labels=colnames(network_reading),
+             vsize=8, border.width=2, edge.labels=FALSE, DoNotPlot = TRUE)
+
+t_music <- qgraph(network_music, layout = 'spring', 
+             details = FALSE, labels=colnames(network_music),
+             vsize=8, border.width=2, edge.labels=FALSE, DoNotPlot = TRUE)
+
+r_m <- averageLayout(t_reading, t_music)
+
+t_reading <- qgraph(network_reading, layout = L, details = FALSE, 
+             labels=colnames(network_reading), vsize=12, border.width=1, 
+             edge.labels=FALSE, title="Reading")
+
+t_music <- qgraph(network_music, layout = L, details = FALSE, 
+             labels=colnames(network_music), vsize=12, border.width=1, 
+             edge.labels=FALSE, title="Music listening")
+
+# Plot networks
+tiff("cross sectional networks reading and music.tiff", width = 3000, height = 2000, units = "px", res = 300)
+par(mfrow = c(1, 2))
+plot(t_reading)
+plot(t_music) 
+dev.off()
+
+
+## Three networks ----
 network_t0 <- EBICglasso(cor_auto(mydata_t0),n = nrow(mydata_t0)) 
 network_t1 <- EBICglasso(cor_auto(mydata_t1),n = nrow(mydata_t1)) 
 network_t2 <- EBICglasso(cor_auto(mydata_t2),n = nrow(mydata_t2)) 
@@ -34,33 +82,30 @@ network_t2 <- EBICglasso(cor_auto(mydata_t2),n = nrow(mydata_t2))
 par(mfrow = c(1, 1))
 t0 <- qgraph(network_t0, layout = 'spring', 
              details = FALSE, labels=colnames(network_t0),
-             vsize=8, border.width=2, edge.labels=FALSE)
+             vsize=8, border.width=2, edge.labels=FALSE,DoNotPlot = TRUE)
 
 t1 <- qgraph(network_t1, layout = 'spring', 
              details = FALSE, labels=colnames(network_t1),
-             vsize=8, border.width=2, edge.labels=FALSE)
+             vsize=8, border.width=2, edge.labels=FALSE,DoNotPlot = TRUE)
 
 t2 <- qgraph(network_t2, layout = 'spring', 
              details = FALSE, labels=colnames(network_t2),
-             vsize=8, border.width=2, edge.labels=FALSE)
+             vsize=8, border.width=2, edge.labels=FALSE,DoNotPlot = TRUE)
 
 # Create average layout to be used consistently across all networks
 L <- averageLayout(t0,t1,t2)
 
 t0 <- qgraph(network_t0, layout = L, details = FALSE, 
              labels=colnames(network_t0), vsize=12, border.width=1, 
-             edge.labels=FALSE,
-             title="Reading")
+             edge.labels=FALSE,title="Reading")
 
 t1 <- qgraph(network_t1, layout = L, details = FALSE, 
              labels=colnames(network_t1), vsize=12, border.width=1, 
-             edge.labels=FALSE,
-             title="Halfway during music listening")
+             edge.labels=FALSE,title="Halfway during music listening")
 
 t2 <- qgraph(network_t2, layout = L, details = FALSE,
              labels=colnames(network_t2), vsize=12, border.width=1, 
-             edge.labels=FALSE,
-             title = "Directly after music listening")
+             edge.labels=FALSE, title = "Directly after music listening")
 
 # Plot networks
 tiff("three network plots reading and music.tiff", width = 2200, height = 2200, units = "px", res = 300)
@@ -82,7 +127,7 @@ met   <- cbind(cent0,cent1,cent2)
 means <- data.frame(met, stringsAsFactors = FALSE) %>%
   tibble::rownames_to_column() %>%
   dplyr::rename(Centrality = rowname) %>%
-  melt(id.vars = "Centrality", variable.name = "Time", value.name = "Mean")
+  reshape2::melt(id.vars = "Centrality", variable.name = "Time", value.name = "Mean")
 
 means$Mean <- as.numeric(means$Mean)
 
@@ -103,60 +148,73 @@ par(mfrow = c(1,1))
 plot(gg_centralities)
 dev.off()
 
-##  Estimate Stability and accuracy
+##  Estimate stability and accuracy
 
 ## Set seed
 set.seed(1234)
 
-result_t0 <- estimateNetwork(mydata_t0,default = "EBICglasso", corMethod = "cor_auto",tuning = 0.5)
+# music
+result_reading <- estimateNetwork(reading, default = "EBICglasso", corMethod = "cor_auto",tuning = 0.5)
 
 ## estimate the accuracy of the edge weights in the network
-boot0 <- bootnet(result_t0, nBoots = 5000, nCores = no_cores)
+boot_reading <- bootnet(result_reading, nBoots = 5000, nCores = no_cores)
 
-# Figure S3 supplemental material - Print edge weight CI
+# Print edge weight CI
 tiff("Fig S3 bootstrap_edge weight_accuracy_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-plot(boot0, plot = "interval", order = "sample", labels = TRUE)
+plot(boot_reading, plot = "interval", order = "sample", labels = TRUE)
 dev.off()
 
-# Figure S4 supplemental material - Print edge weight difference test
 tiff("Fig S4 bootstrap_edge weight_diff_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-plot(boot0,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
+plot(boot_reading,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
 dev.off()
 
-# Centrality stability - casedropping bootstrap
-boot0_case <- bootnet(result_t0, nBoots = 5000, type = "case", nCores = no_cores, 
-                 statistics = c("strength", "closeness", "betweenness"))
+boot_reading_case <- bootnet(result_reading, nBoots = 5000, type = "case", nCores = no_cores, 
+                 statistics = c("strength"))
 
 # CS-coefficients for strength in the person-dropping stability analysis
-corStability(boot0_case, statistics = c("strength"))
+corStability(boot_reading_case, statistics = c("strength"))
 
-# Figure S4 supplemental material - Average correlation between three centrality
-# indices of the glasso network  
 tiff("Fig S5 bootstrap_centrality_stability_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-  plot(boot0_case, statistics = c("strength", "closeness", "betweenness"))
+  plot(boot_reading_case, statistics = c("strength"))
+dev.off()
+
+## music
+result_music <- estimateNetwork(music, default = "EBICglasso", corMethod = "cor_auto",tuning = 0.5)
+
+## estimate the accuracy of the edge weights in the network
+boot_music <- bootnet(result_music, nBoots = 5000, nCores = no_cores)
+
+tiff("Fig S6 bootstrap_edge weight_accuracy_music.tiff", width = 2200, 
+     height = 2200, units = "px", res = 300)
+par(mfrow = c(1, 1))
+plot(boot_music, plot = "interval", order = "sample", labels = TRUE)
+dev.off()
+
+tiff("Fig S7 bootstrap_edge weight_diff_music.tiff", width = 2200, 
+     height = 2200, units = "px", res = 300)
+par(mfrow = c(1, 1))
+plot(boot_music,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
+dev.off()
+
+boot_music_case <- bootnet(result_music, nBoots = 5000, type = "case", 
+                           nCores = no_cores, statistics = c("strength"))
+
+# CS-coefficients for strength in the person-dropping stability analysis
+corStability(boot_music_case, statistics = c("strength"))
+
+tiff("Fig S8 bootstrap_centrality_stability_music.tiff", width = 2200, 
+     height = 2200, units = "px", res = 300)
+par(mfrow = c(1, 1))
+plot(boot_music_case, statistics = c("strength"))
 dev.off()
 
 ## Network Comparison Test ----
-
-# Create a new dataframe for music with the mean values of the two music networks
-df_mean <- data.frame(matrix(0, nrow = nrow(mydata_t1), ncol = ncol(mydata_t1)))
-
-# Loop through each variable
-for (col_index in seq_along(colnames(mydata_t1))) {
-  df_mean[[col_index]] <- rowMeans(cbind(mydata_t1[[col_index]], mydata_t2[[col_index]]))
-}
-
-# Rename the columns based on original variable names
-colnames(df_mean) <- colnames(mydata_t1)
-
-reading <- mydata_t0 
-music   <- df_mean   
 
 #recalculate networks with bootnet; output is input for the NCT
 network_reading <- estimateNetwork(reading, default = "EBICglasso", corMethod = "spearman")
@@ -165,7 +223,7 @@ network_music   <- estimateNetwork(music  , default = "EBICglasso", corMethod = 
 set.seed(1234)
 NCT_reading_music <- NCT(network_reading, network_music, 
                          it               = 1000,
-                         paired           = TRUE, # data is paired
+                         paired           = TRUE, 
                          abs              = FALSE, 
                          test.edges       = TRUE,
                          edges            = "all", 
@@ -231,8 +289,8 @@ data_scaled <- as.data.frame(scale(data))
 # plot distributions of scaled variables
 plot_hist_facet(data_scaled, bins = 8, ncol = 7)
 
-saveRDS(data_scaled, file = "data_scaled.rds")
-# data_scaled <- readRDS("rds/data_scaled.rds")
+saveRDS(data_scaled, file = "rds/data_scaled.rds")
+# data_scaled <- readRDS("rds/rds/data_scaled.rds")
 
 # Checking similarity of sd's
 data_scaled %>% 
@@ -252,65 +310,65 @@ data_scaled %>%
 # Since GVAR models assume stationary relations across time, prior to fitting
 # the models, data was detrended for linear time-related effects and was then
 # standardized across time points
-# vars <- c("AF","SA","IM", "VA","CALM","THO","AE")
+ vars <- c("AF","SA","IM", "VA","CALM","THO","AE")
 # 
-# variables        <- list()
-# variables_lm     <- list()
-# variables_scaled <- list()
+ variables        <- list()
+ variables_lm     <- list()
+ variables_scaled <- list()
 # 
-# mydata_detrend <- mydata %>%
-#   rename(id = ID) %>%
-#   select(id,t0_AF:t2_AE) %>%
-#   mutate(t0_VA   = log10(max(t0_VA   + 1) - t0_VA),
-#          t1_VA   = log10(max(t1_VA   + 1) - t1_VA),
-#          t2_VA   = log10(max(t2_VA   + 1) - t2_VA),
-#          t0_CALM = log10(max(t0_CALM + 1) - t0_CALM),
-#          t1_CALM = log10(max(t1_CALM + 1) - t1_CALM),
-#          t2_CALM = log10(max(t2_CALM + 1) - t2_CALM))
+ mydata_detrend <- mydata %>%
+   rename(id = ID) %>%
+   select(id,t0_AF:t2_AE) %>%
+   mutate(t0_VA   = log10(max(t0_VA   + 1) - t0_VA),
+          t1_VA   = log10(max(t1_VA   + 1) - t1_VA),
+          t2_VA   = log10(max(t2_VA   + 1) - t2_VA),
+          t0_CALM = log10(max(t0_CALM + 1) - t0_CALM),
+          t1_CALM = log10(max(t1_CALM + 1) - t1_CALM),
+          t2_CALM = log10(max(t2_CALM + 1) - t2_CALM))
 # 
-# # detrending loop 
-# for (i in 1:7) {
+# detrending loop 
+ for (i in 1:7) {
 #
-#   # reshape data
-#   variables[[i]] <- mydata_detrend %>% 
-#                     select(contains(vars[i]), id) %>%
-#                     gather(time, var, contains(vars[i])) %>% 
-#                     mutate(time = rep(c(1,2,3), each = 352),
-#                     # dummy variable for reading and music
-#                     read_music = case_when(
-#                     time == 1 ~ 1,
-#                     TRUE      ~ 0),
-#                     read_music = as.factor(read_music))
-#   
-#   # detrend linearly and quadratically
-#   variables_lm[[i]] <- lm(var ~ read_music + time + I(time^2), data = variables[[i]])
-#   
-#   # save detrended data
-#   variables[[i]]$var[!is.na(variables[[i]]$var)] <- residuals(variables_lm[[i]])
-#   
-#   # reshape data
-#   variables_scaled[[i]] <-   variables[[i]] %>% select(-read_music) %>% 
-#     spread(time, var) %>%
-#     select(-id) %>%
-#     as.matrix %>%
-#     as.vector() %>%
-#     scale() %>%
-#     matrix(nrow = 352, ncol = 3) %>% # ncol refers to number of waves
-#     as.data.frame()
-#   
-#   # save formatted and detrended data
-#   colnames(variables_scaled[[i]]) <- mydata_detrend %>% 
-#     select(contains(vars[i])) %>%
-#     colnames
-# }
-# 
+   # reshape data
+   variables[[i]] <- mydata_detrend %>% 
+                     select(contains(vars[i]), id) %>%
+                     gather(time, var, contains(vars[i])) %>% 
+                     mutate(time = rep(c(1,2,3), each = 352),
+                     # dummy variable for reading and music
+                     read_music = case_when(
+                     time == 1 ~ 1,
+                     TRUE      ~ 0),
+                     read_music = as.factor(read_music))
+   
+   # detrend linearly and quadratically
+   variables_lm[[i]] <- lm(var ~ read_music + time + I(time^2), data = variables[[i]])
+   
+   # save detrended data
+   variables[[i]]$var[!is.na(variables[[i]]$var)] <- residuals(variables_lm[[i]])
+   
+   # reshape data
+   variables_scaled[[i]] <-   variables[[i]] %>% select(-read_music) %>% 
+     spread(time, var) %>%
+     select(-id) %>%
+     as.matrix %>%
+     as.vector() %>%
+     scale() %>%
+     matrix(nrow = 352, ncol = 3) %>% # ncol refers to number of waves
+     as.data.frame()
+   
+ # save formatted and detrended data
+    colnames(variables_scaled[[i]]) <- mydata_detrend %>% 
+     select(contains(vars[i])) %>%
+     colnames
+ }
+ 
 # # properly reorder variables
-# data_scaled <- variables_scaled %>% 
-#   as.data.frame() %>% 
-#   select(contains("t0"),contains("t1"),contains("t2"))
+ data_detrended <- variables_scaled %>% 
+   as.data.frame() %>% 
+   select(contains("t0"),contains("t1"),contains("t2"))
 
 # plot distributions of scaled and de-trended variables
-# plot_hist_facet(data_scaled, bins = 8, ncol = 7)
+ plot_hist_facet(data_detrended, bins = 8, ncol = 7)
 
 ## c) Define design matrix ----
 design <- matrix(colnames(data_scaled), nrow = 7, ncol = 3)
@@ -358,22 +416,19 @@ model1 %>% fit
 # check parameters
 model1 %>% parameters()
 
-## Plot analytic confidence intervals 
-# The confidence intervals are only valid for the saturated model
+## Plot analytic confidence intervals (for the saturated model)
+# contemporaneous
 tiff(filename = "Final_CIplots_within_saturated_model.tiff", width = 4000, height = 4000, res = 450)
 par(mfrow = c(1,1))
 CIplot(model1, "omega_zeta_within")
 dev.off()
 
+# temporal
 tiff(filename = "Final_CIplots_beta_saturated_model.tiff",width = 4000, height = 4000, res = 450)
 par(mfrow = c(1,1))
 CIplot(model1, "beta")
 dev.off()
 
-tiff("Final_CIplots_between_saturated_model.tiff",width = 4000, height = 4000, res = 450)
-par(mfrow = c(1,1))
-CIplot(model1, "omega_zeta_between")
-dev.off()
 
 ## e) Prune to find a sparse model ----
 model2 <- model1 %>% prune(alpha = 0.05, recursive = FALSE)
@@ -397,15 +452,12 @@ temporal        <- getmatrix(model3,"PDC") # equals t(getmatrix(model2, "beta"))
 contemporaneous <- getmatrix(model3,"omega_zeta_within")
 between         <- getmatrix(model3,"omega_zeta_between")
 
-graph1 <- qgraph(temporal,layout = "spring")
-graph2 <- qgraph(contemporaneous,layout = "spring")
-graph3 <- qgraph(between,layout = "spring")
+graph1 <- qgraph(temporal,layout = "spring", DoNotPlot = TRUE )
+graph2 <- qgraph(contemporaneous,layout = "spring", DoNotPlot = TRUE )
+graph3 <- qgraph(between,layout = "spring", DoNotPlot = TRUE )
 
 # Create average layout to be used consistently across all networks
 L <- averageLayout(graph1,graph2, graph3)
-
-names <- c("Focused Attention","Self Awareness","Visual Imagery",
-           "Valence","Calmness", "One-topic centered thoughts","Dissociation")
 
 ## a) Community analysis ----
 set.seed(1234)
@@ -455,6 +507,8 @@ gr_net2 <- list('Gr1'= c(4,5),   'Gr2'=c(1,6), 'Gr3'=c(2,3,7))
 
 gr <- list('Emotional State' = c(4,5), 'Focus' = c(1,6), 'Altered Experience' = c(2,3,7))
 
+names <- c("AF","SA","IM","VA","CALM", "THO","AE")
+
 ## b) Three networks in one plot ----
 tiff(filename = "Contemporaneous and temporal networks with panelgvar.tiff",
      width  = 4500, 
@@ -469,9 +523,10 @@ cg <- qgraph(contemporaneous,
              theme='colorblind', 
              negDashed=FALSE,
              legend=FALSE, 
+             labels = names,
              nodeNames = names, 
              groups = gr,
-             vsize=12,
+             vsize=10,
              parallelEdge = TRUE,
              color=viridis::viridis_pal()(5)[3:5],
              details = F)
@@ -483,6 +538,7 @@ tg <- qgraph(temporal,
              negDashed=FALSE, 
              legend.cex=0.5, 
              legend=F, 
+             labels = names,
              nodeNames = names,
              groups=gr,
              vsize=10, 
@@ -497,31 +553,45 @@ dev.off()
 ## c) Strength centrality plots ----
 par(mfrow=c(1,1))
 
+
 tiff(filename="strength centrality contemporaneous network.tiff", width=1250, height=2500, res=450)
-centralityPlot(cg,scale = "z-score", include = c("Strength"))
+centralityPlot(cg,labels = vars, scale = "z-score", include = c("Strength"))
 dev.off()
 
 tiff(filename="strength centrality temporal network.tiff", width=1250, height=2500, res=450)
-centralityPlot(tg,scale = "z-score", include = c("InStrength", "OutStrength"))
+centralityPlot(tg,labels = vars,scale = "z-score", include = c("InStrength", "OutStrength"))
 dev.off()
 
 # 5. RI-CLPM -----                        
 
+# This code was adapted from the example script provided by Freichel et al. (2023)
+#Cross-Lagged Panel Models for Studying Psychopathology: A Comparative Overview of
+#Structural Equation and Panel Network Approaches (tinyurl.com/4m7m78sm)
+
+# remove thought variable because of non PD
+no_thought <- data_scaled %>% select(-t0_THO,-t1_THO,-t2_THO)
+
+design <- matrix(colnames(no_thought), nrow = 6, ncol = 3)
+colnames(design) <- c("t0", "t1", "t2")
+rownames(design) <- c("AF","SA","IM","VA","CALM","AE")
+
+
 # use existing function for model estimation
-riclpm_res <- generate_ri_clpm(data_scaled, design)
+riclpm_res <- generate_ri_clpm(thijs, design)
 
 riclpm_summary <- summary(riclpm_res$lavres, 
                           standardized = TRUE, 
                           fit.measures = TRUE,
-                          modindices = TRUE,
-                          rsquare = TRUE)
+                          modindices   = TRUE,
+                          rsquare      = TRUE)
 
 lavaan::standardizedSolution(riclpm_res$lavres)
 
 fitmeasures <- print(lavaan::fitMeasures(riclpm_res$lavres, 
                                          c("chisq", "df","pvalue", 
                                            "cfi","tli", "srmr","gfi",
-                                           "rmsea","rmsea.ci.lower","rmsea.ci.upper","rmsea.pvalue"), 
+                                           "rmsea","rmsea.ci.lower",
+                                           "rmsea.ci.upper","rmsea.pvalue"), 
                                          output = "text"), add.h0 = TRUE)
 
 # inspect model fit 
