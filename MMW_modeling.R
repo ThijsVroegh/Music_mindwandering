@@ -118,27 +118,42 @@ dev.off()
 ## Centralities of 3 networks ----
 
 #expected influence as main measure of interest
-cent0 <- centrality(t0)$InExpectedInfluence
-cent1 <- centrality(t1)$InExpectedInfluence
-cent2 <- centrality(t2)$InExpectedInfluence
-met   <- cbind(cent0,cent1,cent2)
+t0_reading <- centrality(t0)$InExpectedInfluence
+t1_music <- centrality(t1)$InExpectedInfluence
+t2_music <- centrality(t2)$InExpectedInfluence
+met   <- cbind(t0_reading,t1_music,t2_music)
 
 #plotting
 means <- data.frame(met, stringsAsFactors = FALSE) %>%
   tibble::rownames_to_column() %>%
-  dplyr::rename(Centrality = rowname) %>%
-  reshape2::melt(id.vars = "Centrality", variable.name = "Time", value.name = "Mean")
+  dplyr::rename(ExpectedInfluence = rowname) %>%
+  reshape2::melt(id.vars = "ExpectedInfluence", variable.name = "Time", value.name = "Mean")
 
 means$Mean <- as.numeric(means$Mean)
 
+# Ensure Centrality is treated as a factor
+means$Centrality <- factor(means$ExpectedInfluence, levels = unique(means$ExpectedInfluence))
+str(means)
+
+# Define a named vector for abbreviations (as in Centrality) and their corresponding full names
+abbrev_to_full <- c(
+  "AE"   = "Dissociation",
+  "AF"   = "Attentional Focus",
+  "CALM" = "Calmness",
+  "IM"   = "Visual Imagery",
+  "SA"   = "Self awareness",
+  "THO"  = "Thought Diversity",
+  "VA"   = "Valence"
+)
+
 gg_centralities <- means %>%
-  ggplot(aes(Time, Mean, group = Centrality, color = Centrality)) +
+  ggplot(aes(Time, Mean, group = ExpectedInfluence, color = ExpectedInfluence)) +
   ylim(0, 1.5) +
   geom_point() + 
   geom_line() + 
-  geom_text(aes(label = Centrality, hjust = 0.5, vjust = 0.5)) +
+  geom_text(aes(label = ExpectedInfluence, hjust = 0.5, vjust = 0.5)) +
   labs(x = "Session", y = "z-score") + 
-  scale_color_viridis_d(labels = colnames(network_t0)) +
+  scale_color_viridis_d(labels = abbrev_to_full) +
   theme_minimal(base_size = 10) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -172,16 +187,16 @@ par(mfrow = c(1, 1))
 plot(boot_reading,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
 dev.off()
 
-boot_reading_case <- bootnet(result_reading, nBoots = 5000, type = "case", nCores = no_cores, 
-                 statistics = c("strength"))
+boot_reading_case <- bootnet(result_reading, nBoots = 5000, type = "case", 
+                             nCores = no_cores, statistics = c("expectedInfluence"))
 
-# CS-coefficients for strength in the person-dropping stability analysis
-corStability(boot_reading_case, statistics = c("strength"))
+# CS-coefficients for expectedInfluence in the person-dropping stability analysis
+corStability(boot_reading_case, statistics = c("expectedInfluence"))
 
 tiff("Fig S5 bootstrap_centrality_stability_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-  plot(boot_reading_case, statistics = c("strength"))
+  plot(boot_reading_case, statistics = c("expectedInfluence"))
 dev.off()
 
 ## music
@@ -203,15 +218,15 @@ plot(boot_music,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample
 dev.off()
 
 boot_music_case <- bootnet(result_music, nBoots = 5000, type = "case", 
-                           nCores = no_cores, statistics = c("strength"))
+                           nCores = no_cores, statistics = c("expectedInfluence"))
 
-# CS-coefficients for strength in the person-dropping stability analysis
-corStability(boot_music_case, statistics = c("strength"))
+# CS-coefficients for expectedInfluence in the person-dropping stability analysis
+corStability(boot_music_case, statistics = c("expectedInfluence"))
 
 tiff("Fig S8 bootstrap_centrality_stability_music.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-plot(boot_music_case, statistics = c("strength"))
+plot(boot_music_case, statistics = c("expectedInfluence"))
 dev.off()
 
 ## Network Comparison Test ----
