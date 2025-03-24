@@ -173,18 +173,36 @@ mydata_tbl2$perc_miss <- apply(mydata_tbl2,1,pMiss) #rows
 
 # note: 8 subjects reported not to have had a single thought; hence,11 missings
 
-# missing completely at random (MCAR)? 
 
-#This is the desirable scenario in case of missing data
+# Step 1: Check for MCAR (Missing Completely at Random)
+# Perform the MCAR test on the selected variables
+
+# This is the desirable scenario in case of missing data
 # If the p value for Little's MCAR test is not significant, 
 # then the data may be assumed to be MCAR
-mydata_tbl2 %>% select(t0_1:t0_18, t1_1:t1_18,t2_1:t2_18) %>% 
-  naniar::mcar_test()
 
+check_missing <- mydata_tbl2 %>% select(t0_1:t0_18, t1_1:t1_18, t2_1:t2_18)
+mcar_test_result <- naniar::mcar_test(check_missing)
+
+print(mcar_test_result)
+
+# Step 2: Count the number of participants with at least one missing value
+num_missing_participants <- sum(rowSums(is.na(check_missing)) > 0)
+print(paste("Number of participants with at least one missing value: ", num_missing_participants))
+
+# Calculate percentage of participants affected
+total_participants <- nrow(check_missing)
+percent_missing_participants <- (num_missing_participants / total_participants) * 100
+
+# Display results
+cat("Number of participants with missing data:", num_missing_participants, "\n")
+cat("Percentage of participants affected:", round(percent_missing_participants, 2), "%\n")
+
+# Step 3: Impute missing values using MICE
 # imputation of missing values for t0_1 to t2_18
-init  <- mice(mydata_tbl2, maxit = 0)
-meth  <- init$method
-predM <- init$predictorMatrix
+init  <- mice(mydata_tbl2, maxit = 0) # Initialize MICE
+meth  <- init$method # Extract imputation methods
+predM <- init$predictorMatrix # Extract predictor matrix
 
 # exclude variables being used in imputation process 
 predM[,c("ID",
@@ -193,12 +211,14 @@ predM[,c("ID",
          "thoughts_keyword3",
          "Country")] = 0
 
+# # Select only the relevant variables for imputation
 subset <- mydata_tbl2 %>% 
   select(t0_1:t0_18, t1_1:t1_18,t2_1:t2_18) %>% 
   names()
 
 meth[!names(mydata_tbl2) %in% subset] <- ""
 
+# Impute missing values
 set.seed(1234)
 imputed <- mice(mydata_tbl2, 
                 method = meth, 
@@ -206,6 +226,8 @@ imputed <- mice(mydata_tbl2,
                 m = 5)
 
 df_imputed <- complete(imputed)
+
+
 sapply(df_imputed, function(x) sum(is.na(x)))
 
 df_imputed <- df_imputed %>% 
