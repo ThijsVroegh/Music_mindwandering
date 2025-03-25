@@ -8,6 +8,7 @@
 # 1. Load libraries ----
 library(tidyverse)
 library(mice)   
+library(MASS)
 
 # remove all data in global environment
 rm(list = ls())
@@ -17,6 +18,7 @@ set.seed(1234)
 
 # 2. Reading in data ----
 mydata <- haven::read_sav("../data/MW.sav")
+
 
 # spss codebook
 value_labels <- labelled::val_labels(mydata)
@@ -104,7 +106,7 @@ mydata_tbl <- mydata %>%
          Musician    = Q20) %>% 
   
   # Remove unnecessary columns
-  select(-Q24,-Q150,-Q4a_1:-Q4b_9.M) %>% 
+  select(-Q4a_1:-Q4b_9.M) %>% 
   
   # Questions on thought categories -> feature engineering
   #Na's to 0 -> 1= yes, 0 = no
@@ -156,15 +158,78 @@ mydata_tbl2 <- mydata_tbl %>%
          count_na_delib = apply(.[115:118], 1, count_na_func)) %>% 
   
   # sum of missing values in three waves of measurements       
-  mutate(sum_missing    = apply(.[135:137], 1, sum_func)) %>%
+  #mutate(sum_missing    = apply(.[136:138], 1, sum_func)) %>%
+  mutate(sum_missing    = apply(.[c("count_na_Q2", "count_na_Q4", "count_na_Q5")], 1, sum_func)) %>%
   
   ungroup() %>% 
   
   # delete id's with too many missing values
   filter(sum_missing <= 5) 
 
-## Missing values ----
+df <- mydata_tbl2
+  
+# # Recruitment analysis ----
+# Compare demographic variables between Prolific and Non-Prolific groups
+df$recruitment_method <- ifelse(df$Q150 != "", "Prolific", "Non-Prolific")
 
+# 1. Age (t-test or Wilcoxon test depending on normality)
+sum(is.na(df$Age)) # 0
+unique(df$Age)
+df$Age <- factor(df$Age, levels = c(1, 2, 3, 4, 5, 6, 7, 8, 9), ordered = TRUE)
+df$Age <- as.numeric(df$Age)
+
+# check if age is normally distributed
+shapiro.test(df$Age) # W = 0.91106, p-value = 1.502e-13
+
+# -> the distribution of the Age variable is not normally distributed, 
+# so we will use the Wilcoxon test
+age_comparison <- wilcox.test(Age ~ recruitment_method, data = df)
+# W = 12020, p-value = 0.18, suggesting no significant difference in the age
+# distribution between the two groups.
+
+# 2. Sex (Chi-square test)
+unique(df$Sex)
+sex_comparison <- chisq.test(table(df$Sex, df$recruitment_method))
+# X-squared = 0.4037, df = 2, p-value = 0.81, suggesting there is no 
+# significant difference in sex distribution between the Prolific and 
+# non-Prolific groups
+
+# 3. Gender (Chi-square test)
+unique(df$Gender)
+gender_comparison <- chisq.test(table(df$Gender, df$recruitment_method))
+# X-squared = 7.5057, df = 3, p-value = 0.06, suggesting there is no 
+# significant difference in gender distribution between the Prolific and 
+# non-Prolific groups
+
+# 4. Musician
+sum(is.na(df$Musician)) # 0
+unique(df$Musician)
+df$Musician <- factor(df$Musician, levels = c(1, 2, 3, 4, 5), ordered = TRUE)
+
+musician_comparison <- polr(Musician ~ recruitment_method, data = df, Hess = TRUE)
+summary(musician_comparison)
+p_value <- 2 * pnorm(abs(-10.31), lower.tail = FALSE)
+p_value # 6.350132e-25, suggesting there is a significant difference in the
+# musician distribution between the Prolific and non-Prolific groups
+
+# 5. Participation in Lottery (Email address presence)
+df$lottery_participation <- ifelse(df$Q24 != "", "Yes", "No")
+lottery_comparison <- chisq.test(table(df$lottery_participation, df$recruitment_method))
+# X-squared = 0.21503, df = 1, p-value = 0.6429, suggesting there is no 
+# significant difference in lottery participation between the Prolific and
+# non-Prolific groups
+
+# Output all comparisons
+list(
+  age_comparison = age_comparison,
+  sex_comparison = sex_comparison,
+  gender_comparison = gender_comparison,
+  musician_comparison = musician_comparison,
+  lottery_comparison = lottery_comparison
+)
+
+
+## Missing values ----
 # check the data for percentage of missing values, column and rowwise
 pMiss <- function(x){round(sum(is.na(x))/length(x)*100,2)}
 
