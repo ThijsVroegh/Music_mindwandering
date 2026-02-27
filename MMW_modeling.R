@@ -8,8 +8,6 @@ library(psychonetrics)
 library(bootnet)      
 library(NetworkComparisonTest)
 
-no_cores <- parallel::detectCores() - 1
-
 # remove all data in global environment
 rm(list = ls())
 
@@ -25,9 +23,9 @@ set.seed(1234)
 mydata <- readRDS("rds/data_cleaned.rds")
 
 ## correlations
-mydata_t0 <- mydata %>% select(t0_AF:t0_AE) %>% rename_at(vars(starts_with("t0_")),  ~ str_replace(., "t0_", ""))
-mydata_t1 <- mydata %>% select(t1_AF:t1_AE) %>% rename_at(vars(starts_with("t1_")),~ str_replace(., "t1_", ""))
-mydata_t2 <- mydata %>% select(t2_AF:t2_AE) %>% rename_at(vars(starts_with("t2_")),~ str_replace(., "t2_", ""))
+mydata_t0 <- mydata %>% dplyr::select(t0_AF:t0_AE) %>% rename_at(vars(starts_with("t0_")),  ~ str_replace(., "t0_", ""))
+mydata_t1 <- mydata %>% dplyr::select(t1_AF:t1_AE) %>% rename_at(vars(starts_with("t1_")),~ str_replace(., "t1_", ""))
+mydata_t2 <- mydata %>% dplyr::select(t2_AF:t2_AE) %>% rename_at(vars(starts_with("t2_")),~ str_replace(., "t2_", ""))
 
 # 2 GGM networks reading versus music ----
 
@@ -58,11 +56,11 @@ t_music <- qgraph(network_music, layout = 'spring',
 
 r_m <- averageLayout(t_reading, t_music)
 
-t_reading <- qgraph(network_reading, layout = L, details = FALSE, 
+t_reading <- qgraph(network_reading, layout = r_m, details = FALSE, 
              labels=colnames(network_reading), vsize=12, border.width=1, 
              edge.labels=FALSE, title="Reading")
 
-t_music <- qgraph(network_music, layout = L, details = FALSE, 
+t_music <- qgraph(network_music, layout = r_m, details = FALSE, 
              labels=colnames(network_music), vsize=12, border.width=1, 
              edge.labels=FALSE, title="Music listening")
 
@@ -72,7 +70,6 @@ par(mfrow = c(1, 2))
 plot(t_reading)
 plot(t_music) 
 dev.off()
-
 
 ## Three networks ----
 network_t0 <- EBICglasso(cor_auto(mydata_t0),n = nrow(mydata_t0)) 
@@ -108,7 +105,7 @@ t2 <- qgraph(network_t2, layout = L, details = FALSE,
              edge.labels=FALSE, title = "Directly after music listening")
 
 # Plot networks
-tiff("three network plots reading and music.tiff", width = 2200, height = 2200, units = "px", res = 300)
+tiff("Fig S3 three network plots reading and music.tiff", width = 2200, height = 2200, units = "px", res = 300)
 par(mfrow = c(2,2))
 plot(t0)
 plot(t1) 
@@ -158,7 +155,7 @@ gg_centralities <- means %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # Plot centrality for three measurement points
-tiff("centralities through time from reading to music.tiff", width = 2200, height = 1500, units = "px", res = 300)
+tiff("Fig 4 centralities through time from reading to music.tiff", width = 2200, height = 1500, units = "px", res = 300)
 par(mfrow = c(1,1))
 plot(gg_centralities)
 dev.off()
@@ -168,23 +165,29 @@ dev.off()
 ## Set seed
 set.seed(1234)
 
-# music
-result_reading <- estimateNetwork(reading, default = "EBICglasso", corMethod = "cor_auto",tuning = 0.5)
+
+# reading
+no_cores <- parallel::detectCores() - 1
+
+result_reading <- estimateNetwork(reading, default = "EBICglasso", 
+                                  corMethod = "cor_auto",tuning = 0.5)
 
 ## estimate the accuracy of the edge weights in the network
 boot_reading <- bootnet(result_reading, nBoots = 5000, nCores = no_cores)
 
 # Print edge weight CI
-tiff("Fig S3 bootstrap_edge weight_accuracy_reading.tiff", width = 2200, 
+tiff("Fig S4 bootstrap_edge weight_accuracy_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
 plot(boot_reading, plot = "interval", order = "sample", labels = TRUE)
 dev.off()
 
-tiff("Fig S4 bootstrap_edge weight_diff_reading.tiff", width = 2200, 
+tiff("Fig S5 bootstrap_edge weight_diff_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-plot(boot_reading,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
+# Plot significant differences (alpha = 0.05) of edges
+plot(boot_reading, "edge", plot = "difference", onlyNonZero = TRUE, 
+     order = "sample", differenceShowValue = TRUE)
 dev.off()
 
 boot_reading_case <- bootnet(result_reading, nBoots = 5000, type = "case", 
@@ -193,7 +196,7 @@ boot_reading_case <- bootnet(result_reading, nBoots = 5000, type = "case",
 # CS-coefficients for expectedInfluence in the person-dropping stability analysis
 corStability(boot_reading_case, statistics = c("expectedInfluence"))
 
-tiff("Fig S5 bootstrap_centrality_stability_reading.tiff", width = 2200, 
+tiff("Fig S6 bootstrap_centrality_stability_reading.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
   plot(boot_reading_case, statistics = c("expectedInfluence"))
@@ -205,16 +208,17 @@ result_music <- estimateNetwork(music, default = "EBICglasso", corMethod = "cor_
 ## estimate the accuracy of the edge weights in the network
 boot_music <- bootnet(result_music, nBoots = 5000, nCores = no_cores)
 
-tiff("Fig S6 bootstrap_edge weight_accuracy_music.tiff", width = 2200, 
+tiff("Fig S7 bootstrap_edge weight_accuracy_music.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
 plot(boot_music, plot = "interval", order = "sample", labels = TRUE)
 dev.off()
 
-tiff("Fig S7 bootstrap_edge weight_diff_music.tiff", width = 2200, 
+tiff("Fig S8 bootstrap_edge weight_diff_music.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
-plot(boot_music,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample")
+plot(boot_music,"edge", plot = "difference", onlyNonZero = TRUE, order = "sample",
+     differenceShowValue = TRUE)
 dev.off()
 
 boot_music_case <- bootnet(result_music, nBoots = 5000, type = "case", 
@@ -223,11 +227,12 @@ boot_music_case <- bootnet(result_music, nBoots = 5000, type = "case",
 # CS-coefficients for expectedInfluence in the person-dropping stability analysis
 corStability(boot_music_case, statistics = c("expectedInfluence"))
 
-tiff("Fig S8 bootstrap_centrality_stability_music.tiff", width = 2200, 
+tiff("Fig S9 bootstrap_centrality_stability_music.tiff", width = 2200, 
      height = 2200, units = "px", res = 300)
 par(mfrow = c(1, 1))
 plot(boot_music_case, statistics = c("expectedInfluence"))
 dev.off()
+
 
 ## Network Comparison Test ----
 
@@ -282,21 +287,21 @@ difference_value(NCT_reading_music)
 
 ## a) Checks ----
 # check the variances across the measurement points
-mydata %>% select(t0_AF:t2_AE) %>% 
+mydata %>% dplyr::select(t0_AF:t2_AE) %>% 
   map_df(sd) %>% 
   pivot_longer(starts_with('t'), 
                names_to = c('time', '.value'), 
                names_sep = '\\_')
 
 # check the means across the measurement points
-mydata %>% select(t0_AF:t2_AE) %>% 
+mydata %>% dplyr::select(t0_AF:t2_AE) %>% 
   map_df(mean) %>% 
   pivot_longer(starts_with('t'), 
                names_to = c('time', '.value'), 
                names_sep = '\\_')
 
 ## b) Scaling/ standardizing data ----
-data <- mydata %>% select(t0_AF:t2_AE)
+data <- mydata %>% dplyr::select(t0_AF:t2_AE)
 
 # standardize data across time points
 data_scaled <- as.data.frame(scale(data))
@@ -305,7 +310,7 @@ data_scaled <- as.data.frame(scale(data))
 plot_hist_facet(data_scaled, bins = 8, ncol = 7)
 
 saveRDS(data_scaled, file = "rds/data_scaled.rds")
-# data_scaled <- readRDS("rds/rds/data_scaled.rds")
+#data_scaled <- readRDS("rds/data_scaled.rds")
 
 # Checking similarity of sd's
 data_scaled %>% 
@@ -333,7 +338,7 @@ data_scaled %>%
 # 
  mydata_detrend <- mydata %>%
    rename(id = ID) %>%
-   select(id,t0_AF:t2_AE) %>%
+   dplyr::select(id,t0_AF:t2_AE) %>%
    mutate(t0_VA   = log10(max(t0_VA   + 1) - t0_VA),
           t1_VA   = log10(max(t1_VA   + 1) - t1_VA),
           t2_VA   = log10(max(t2_VA   + 1) - t2_VA),
@@ -346,7 +351,7 @@ data_scaled %>%
 #
    # reshape data
    variables[[i]] <- mydata_detrend %>% 
-                     select(contains(vars[i]), id) %>%
+                     dplyr::select(contains(vars[i]), id) %>%
                      gather(time, var, contains(vars[i])) %>% 
                      mutate(time = rep(c(1,2,3), each = 352),
                      # dummy variable for reading and music
@@ -362,9 +367,9 @@ data_scaled %>%
    variables[[i]]$var[!is.na(variables[[i]]$var)] <- residuals(variables_lm[[i]])
    
    # reshape data
-   variables_scaled[[i]] <-   variables[[i]] %>% select(-read_music) %>% 
+   variables_scaled[[i]] <-   variables[[i]] %>% dplyr::select(-read_music) %>% 
      spread(time, var) %>%
-     select(-id) %>%
+     dplyr::select(-id) %>%
      as.matrix %>%
      as.vector() %>%
      scale() %>%
@@ -373,18 +378,19 @@ data_scaled %>%
    
  # save formatted and detrended data
     colnames(variables_scaled[[i]]) <- mydata_detrend %>% 
-     select(contains(vars[i])) %>%
+      dplyr::select(contains(vars[i])) %>%
      colnames
  }
  
 # # properly reorder variables
  data_detrended <- variables_scaled %>% 
    as.data.frame() %>% 
-   select(contains("t0"),contains("t1"),contains("t2"))
+   dplyr::select(contains("t0"),contains("t1"),contains("t2"))
 
 # plot distributions of scaled and de-trended variables
  plot_hist_facet(data_detrended, bins = 8, ncol = 7)
 
+ 
 ## c) Define design matrix ----
 design <- matrix(colnames(data_scaled), nrow = 7, ncol = 3)
 colnames(design) <- c("t0", "t1", "t2")
@@ -399,12 +405,15 @@ ev1 <- eigen(cor(data_scaled[,design[,1]]))$values
 ev2 <- eigen(cor(data_scaled[,design[,2]]))$values
 ev3 <- eigen(cor(data_scaled[,design[,3]]))$values
 
-# It appears that the second and third time points (music) are
-# more unidimensional than the first time point (reading)
-# Plot networks
-tiff("Eigenvalues.tiff", width = 2200, height = 2200, units = "px", res = 300)
+# The steeper eigenvalue decline during music (vs. reading) indicates
+# greater network cohesion and connectivity among the experiential features
+# Plot eigenvalues with proper axis labels
+tiff("Fig S10 Eigenvalues.tiff", width = 2200, height = 2200, units = "px", res = 300)
   par(mfrow = c(1, 1))
-  matplot(cbind(ev1,ev2,ev3),type = "l", ylab = "Eigenvalue")
+  matplot(cbind(ev1,ev2,ev3), type = "l", ylab = "Eigenvalue", xlab = "Eigenvalue Number",
+          main = "")
+  legend("topright", legend = c("t0 (reading)", "t1 (music, halfway)", "t2 (music, end)"),
+         col = 1:3, lty = 1:3, bty = "n")
 dev.off()
 
 # Labels to be used in graphs
@@ -432,18 +441,18 @@ model1 %>% fit
 model1 %>% parameters()
 
 ## Plot analytic confidence intervals (for the saturated model)
-# contemporaneous
-tiff(filename = "Final_CIplots_within_saturated_model.tiff", width = 4000, height = 4000, res = 450)
+
+### contemporaneous -------------
+tiff(filename = "Fig S11 Final_CIplots_within_saturated_model.tiff", width = 4000, height = 4000, res = 450)
 par(mfrow = c(1,1))
 CIplot(model1, "omega_zeta_within")
 dev.off()
 
-# temporal
-tiff(filename = "Final_CIplots_beta_saturated_model.tiff",width = 4000, height = 4000, res = 450)
+### temporal -------------
+tiff(filename = "Fig S12 Final_CIplots_beta_saturated_model.tiff",width = 4000, height = 4000, res = 450)
 par(mfrow = c(1,1))
 CIplot(model1, "beta")
 dev.off()
-
 
 ## e) Prune to find a sparse model ----
 model2 <- model1 %>% prune(alpha = 0.05, recursive = FALSE)
@@ -525,7 +534,7 @@ gr <- list('Emotional State' = c(4,5), 'Focus' = c(1,6), 'Altered Experience' = 
 names <- c("AF","SA","IM","VA","CALM", "THO","AE")
 
 ## b) Three networks in one plot ----
-tiff(filename = "Contemporaneous and temporal networks with panelgvar.tiff",
+tiff(filename = "Fig 5 Contemporaneous and temporal networks with panelgvar.tiff",
      width  = 4500, 
      height = 2500, 
      res    = 600)
@@ -568,13 +577,22 @@ dev.off()
 ## c) Strength centrality plots ----
 par(mfrow=c(1,1))
 
+# Contemporaneous network strength centrality
+p_contemp <- centralityPlot(contemporaneous, labels = names, scale = "z-score", 
+                            include = c("Strength"), print = FALSE)
+p_contemp <- p_contemp + labs(x = "Standardised Strength Centrality")
 
-tiff(filename="strength centrality contemporaneous network.tiff", width=1250, height=2500, res=450)
-centralityPlot(cg,labels = vars, scale = "z-score", include = c("Strength"))
+tiff(filename="Fig 6a strength centrality contemporaneous network.tiff", width=1250, height=2500, res=450)
+print(p_contemp)
 dev.off()
 
-tiff(filename="strength centrality temporal network.tiff", width=1250, height=2500, res=450)
-centralityPlot(tg,labels = vars,scale = "z-score", include = c("InStrength", "OutStrength"))
+# Temporal network in/out strength centrality
+p_temp <- centralityPlot(temporal, labels = names, scale = "z-score", 
+                         include = c("InStrength", "OutStrength"), print = FALSE)
+p_temp <- p_temp + labs(x = "Standardised Centrality Score")
+
+tiff(filename="Fig 6b strength centrality temporal network.tiff", width=1250, height=2500, res=450)
+print(p_temp)
 dev.off()
 
 # 5. RI-CLPM -----                        
@@ -584,7 +602,7 @@ dev.off()
 #Structural Equation and Panel Network Approaches (tinyurl.com/4m7m78sm)
 
 # remove thought variable because of non PD
-no_thought <- data_scaled %>% select(-t0_THO,-t1_THO,-t2_THO)
+no_thought <- data_scaled %>% dplyr::select(-t0_THO,-t1_THO,-t2_THO)
 
 design <- matrix(colnames(no_thought), nrow = 6, ncol = 3)
 colnames(design) <- c("t0", "t1", "t2")
@@ -655,14 +673,14 @@ plot(contemp_thresh_riclpm)
 dev.off()
 
 
-# 6 Stability Analysis with bootstrapping ----
+# 6 Stability analysis with bootstrapping ----
 
 # see Nur Hani Zainal & Michelle G. Newman" (2021) for a detailed description
 
 ## a) Bootstrapping ----
 # keep number low (ca. 200), otherwise may take quite a long time
 set.seed(1234)
-nBoot <- 200
+nBoot <- 100
 
 Bootstraps <- lapply(1:nBoot, function(x) {
   
@@ -701,7 +719,8 @@ apply(simplify2array(resBoots_temp), 1:2, mean)
 Bootstraps_temporal_est_df            <- as.data.frame(apply(simplify2array(resBoots_temp), 1:2, sum))
 row.names(Bootstraps_temporal_est_df) <- colnames(Bootstraps_temporal_est_df) <- colnames(mydata_t0)
 
-write.csv(Bootstraps_temporal_est_df, "Bootstraps_temporal_est_df.csv")
+# Table 2a Bootstrapping results for panel GVAR temporal network
+write.csv(Bootstraps_temporal_est_df, "Table 2a Bootstraps_temporal_est_df.csv")
 
 ## c) Bootstrapped results for contemporaneous network----
 resBoots_cont <-
@@ -713,6 +732,7 @@ apply(simplify2array(resBoots_cont), 1:2, mean)
 Bootstraps_contemporaneous_est_df            <- as.data.frame(apply(simplify2array(resBoots_cont), 1:2, sum))
 row.names(Bootstraps_contemporaneous_est_df) <- colnames(Bootstraps_contemporaneous_est_df) <- colnames(mydata_t0)
 
-write.csv(Bootstraps_contemporaneous_est_df, "Bootstraps_contemporaneous_est_df.csv")
+# Table 2b Bootstrapping results for panel GVAR temporal and contemporaneous network.
+write.csv(Bootstraps_contemporaneous_est_df, "Table 2b Bootstraps_contemporaneous_est_df.csv")
 
 sessioninfo::session_info()

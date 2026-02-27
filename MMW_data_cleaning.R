@@ -37,30 +37,30 @@ mydata_tbl <- mydata %>%
          !Q150 %in% remove_prolific,
          !is.na(Q3)) %>% #280
   
-  select(-StartDate:-Q1) %>% 
+  dplyr::select(-StartDate:-Q1) %>% 
   mutate(ID = 1:n()) %>% 
-  select(ID,everything()) %>%
-  select(-(starts_with("time"))) %>% 
+  dplyr::select(ID,everything()) %>%
+  dplyr::select(-(starts_with("time"))) %>% 
   
   #combine data of different musical genres 
-  mutate(Q4_1 = select(., starts_with("Q4a_1")) %>% rowMeans( na.rm = TRUE),
-         Q4_2 = select(., starts_with("Q4a_2")) %>% rowMeans( na.rm = TRUE),
-         Q4_3 = select(., starts_with("Q4a_3")) %>% rowMeans( na.rm = TRUE),
-         Q4_4 = select(., starts_with("Q4a_4")) %>% rowMeans( na.rm = TRUE),
-         Q4_5 = select(., starts_with("Q4a_5")) %>% rowMeans( na.rm = TRUE),
-         Q4_6 = select(., starts_with("Q4a_6")) %>% rowMeans( na.rm = TRUE),
-         Q4_7 = select(., starts_with("Q4a_7")) %>% rowMeans( na.rm = TRUE),
-         Q4_8 = select(., starts_with("Q4a_8")) %>% rowMeans( na.rm = TRUE),
-         Q4_9 = select(., starts_with("Q4a_9")) %>% rowMeans( na.rm = TRUE),
-         Q4_10 = select(., starts_with("Q4b_1")) %>% rowMeans( na.rm = TRUE),
-         Q4_11 = select(., starts_with("Q4b_2")) %>% rowMeans( na.rm = TRUE),
-         Q4_12 = select(., starts_with("Q4b_3")) %>% rowMeans( na.rm = TRUE),
-         Q4_13 = select(., starts_with("Q4b_4")) %>% rowMeans( na.rm = TRUE),
-         Q4_14 = select(., starts_with("Q4b_5")) %>% rowMeans( na.rm = TRUE),
-         Q4_15 = select(., starts_with("Q4b_6")) %>% rowMeans( na.rm = TRUE),
-         Q4_16 = select(., starts_with("Q4b_7")) %>% rowMeans( na.rm = TRUE),
-         Q4_17 = select(., starts_with("Q4b_8")) %>% rowMeans( na.rm = TRUE),
-         Q4_18 = select(., starts_with("Q4b_9")) %>% rowMeans( na.rm = TRUE)) %>% 
+  mutate(Q4_1 = dplyr::select(., starts_with("Q4a_1")) %>% rowMeans( na.rm = TRUE),
+         Q4_2 = dplyr::select(., starts_with("Q4a_2")) %>% rowMeans( na.rm = TRUE),
+         Q4_3 = dplyr::select(., starts_with("Q4a_3")) %>% rowMeans( na.rm = TRUE),
+         Q4_4 = dplyr::select(., starts_with("Q4a_4")) %>% rowMeans( na.rm = TRUE),
+         Q4_5 = dplyr::select(., starts_with("Q4a_5")) %>% rowMeans( na.rm = TRUE),
+         Q4_6 = dplyr::select(., starts_with("Q4a_6")) %>% rowMeans( na.rm = TRUE),
+         Q4_7 = dplyr::select(., starts_with("Q4a_7")) %>% rowMeans( na.rm = TRUE),
+         Q4_8 = dplyr::select(., starts_with("Q4a_8")) %>% rowMeans( na.rm = TRUE),
+         Q4_9 = dplyr::select(., starts_with("Q4a_9")) %>% rowMeans( na.rm = TRUE),
+         Q4_10 = dplyr::select(., starts_with("Q4b_1")) %>% rowMeans( na.rm = TRUE),
+         Q4_11 = dplyr::select(., starts_with("Q4b_2")) %>% rowMeans( na.rm = TRUE),
+         Q4_12 = dplyr::select(., starts_with("Q4b_3")) %>% rowMeans( na.rm = TRUE),
+         Q4_13 = dplyr::select(., starts_with("Q4b_4")) %>% rowMeans( na.rm = TRUE),
+         Q4_14 = dplyr::select(., starts_with("Q4b_5")) %>% rowMeans( na.rm = TRUE),
+         Q4_15 = dplyr::select(., starts_with("Q4b_6")) %>% rowMeans( na.rm = TRUE),
+         Q4_16 = dplyr::select(., starts_with("Q4b_7")) %>% rowMeans( na.rm = TRUE),
+         Q4_17 = dplyr::select(., starts_with("Q4b_8")) %>% rowMeans( na.rm = TRUE),
+         Q4_18 = dplyr::select(., starts_with("Q4b_9")) %>% rowMeans( na.rm = TRUE)) %>% 
   
   rename_at(.vars = vars(Q2a_1:Q2b_9), 
             .funs = ~ str_c("t0_", 1:18)) %>% 
@@ -106,7 +106,7 @@ mydata_tbl <- mydata %>%
          Musician    = Q20) %>% 
   
   # Remove unnecessary columns
-  select(-Q4a_1:-Q4b_9.M) %>% 
+  dplyr::select(-Q4a_1:-Q4b_9.M) %>% 
   
   # Questions on thought categories -> feature engineering
   #Na's to 0 -> 1= yes, 0 = no
@@ -142,7 +142,7 @@ mydata_tbl <- mydata %>%
                                       6, Amount_of_thoughts)) %>% 
   
   # properly reorder all variables
-  select(ID:t0_18,M_genre,t1_1:t1_18,everything())
+  dplyr::select(ID:t0_18,M_genre,t1_1:t1_18,everything())
 
 # count rowwise missing values per measurement (T1,T2,T3,Traits)
 count_na_func <- function(x) sum(is.na(x)) 
@@ -246,7 +246,7 @@ mydata_tbl2$perc_miss <- apply(mydata_tbl2,1,pMiss) #rows
 # If the p value for Little's MCAR test is not significant, 
 # then the data may be assumed to be MCAR
 
-check_missing <- mydata_tbl2 %>% select(t0_1:t0_18, t1_1:t1_18, t2_1:t2_18)
+check_missing <- mydata_tbl2 %>% dplyr::select(t0_1:t0_18, t1_1:t1_18, t2_1:t2_18)
 mcar_test_result <- naniar::mcar_test(check_missing)
 
 print(mcar_test_result)
@@ -278,7 +278,7 @@ predM[,c("ID",
 
 # # Select only the relevant variables for imputation
 subset <- mydata_tbl2 %>% 
-  select(t0_1:t0_18, t1_1:t1_18,t2_1:t2_18) %>% 
+  dplyr::select(t0_1:t0_18, t1_1:t1_18,t2_1:t2_18) %>% 
   names()
 
 meth[!names(mydata_tbl2) %in% subset] <- ""
@@ -359,7 +359,7 @@ mydata_tbl3 <- df_imputed %>%
 ## alphas and inter-item correlations ----
 
 # alphas of measures
-IRI_alpha <- alpha(mydata_tbl3[c('Q13_IRI_Fantasy_1',
+IRI_alpha <- psych::alpha(mydata_tbl3[c('Q13_IRI_Fantasy_1',
                                  'Q13_IRI_Fantasy_2',
                                  'Q13_IRI_Fantasy_3',
                                  'Q13_IRI_Fantasy_4',
@@ -367,12 +367,12 @@ IRI_alpha <- alpha(mydata_tbl3[c('Q13_IRI_Fantasy_1',
                                  'Q13_IRI_Fantasy_6',
                                  'Q13_IRI_Fantasy_7')]) #.80
 
-Deliberate_MW_alpha <- alpha(mydata_tbl3[c('Q14_Del_Spont_MW_1',
+Deliberate_MW_alpha <- psych::alpha(mydata_tbl3[c('Q14_Del_Spont_MW_1',
                                            'Q14_Del_Spont_MW_2',
                                            'Q14_Del_Spont_MW_3',
                                            'Q14_Del_Spont_MW_4')]) #.86
 
-Spontaneous_MW <- alpha(mydata_tbl3[c('Q14_Del_Spont_MW_5',
+Spontaneous_MW <- psych::alpha(mydata_tbl3[c('Q14_Del_Spont_MW_5',
                                       'Q14_Del_Spont_MW_6',
                                       'Q14_Del_Spont_MW_7',
                                       'Q14_Del_Spont_MW_8')])  #.81 
@@ -408,14 +408,14 @@ mean_correlations <- sapply(correlations, mean)
 mydata_tbl4 <- mydata_tbl3 %>% 
   
   # reorder all variables in proper order
-  select(ID, M_genre, 
+  dplyr::select(ID, M_genre, 
          t0_AF:t2_AE, 
          Amount_of_thoughts: Q11_10,
          IRI_Fantasy: Spontaneous_MW,
-         Age,Sex,Musician) %>% 
+         Age,Sex,Country,Musician) %>% 
   
   # we don't include these variables in the network analysis
-  select(-t0_DIR, -t1_DIR, -t2_DIR,
+  dplyr::select(-t0_DIR, -t1_DIR, -t2_DIR,
          -t0_VC, -t1_VC, -t2_VC,
          -t0_ID, -t1_ID, -t2_ID,
          -thoughts_keyword1, -thoughts_keyword2, -thoughts_keyword3,
